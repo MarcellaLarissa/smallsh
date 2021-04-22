@@ -6,6 +6,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 #include <ctype.h>
@@ -48,8 +49,10 @@ int redirectOutput(struct aCommand* cmd);
 void runBackground(struct aCommand* cmd);
 void printCommand(struct aCommand* cmd);
 void changeDir(struct aCommand* cmd);
-int getStatus(struct aCommand* cmd, int exitStatus);
+int getStatus(struct aCommand* lastCommand, int exitStatus);
+void printStatus(int exitStatus);
 int exitShell(struct aCommand* cmd);
+void runCommand(struct aCommand *cmd, int *exitStatus);
 
 /**********************************************
 *
@@ -444,17 +447,36 @@ void changeDir(struct aCommand* cmd){
     }
 }
 
+/*
+* This function
+*/
 int getStatus(struct aCommand* lastCommand, int exitStatus){
-    //if no command has run, 
+    //if no command has run, *****************************************************************handle this in commandRun function
     if(strcmp(lastCommand->program, "status") == 0){
-        return 0;
+        printStatus(exitStatus);
     }
     //if last command was built in, ignore
+    if(strcmp(lastCommand->program, "exit") != 0 || strcmp(lastCommand->program, "cd") != 0 || strcmp(lastCommand->program, "status") != 0){
+        printStatus(exitStatus);
+    }
+     printf("lastCommand is: \n");
+    printCommand(lastCommand);
+    return 0;
+}
 
-    //get exit status for process
-
-    //get SIG for process
-    return 1;
+// small function that inspects the status and prints accordingly
+void printStatus(int exitStatus)
+{
+	// process exited via return from main / exit()
+    if(WIFEXITED(exitStatus)) 
+    {
+        printf("exit value: %d\n", WEXITSTATUS(exitStatus));
+    }
+	// process was terminated / segfaulted / etc.
+    else 
+    {
+        printf("terminated by signal: %d\n", WTERMSIG(exitStatus));
+    }
 }
 
 /*
@@ -462,53 +484,102 @@ int getStatus(struct aCommand* lastCommand, int exitStatus){
 */
 int exitShell(struct aCommand* cmd){
     //not sure if this is the right place for atexit()
-    /*int xStat = atexit(getStatus);//some zombie checking im guessing????????????????????
+    /*int xStat = atexit(getStatus(lastCommand, exitStatus));//some zombie checking im guessing????????????????????
     exit(xStat);
     return xStat;*/
+    exit();
     return 0;
 }
 
+// basic run command that only runs commands in the foreground
+// doesn't handle I/O redirection or ctrl-c 
+void runCommand(struct aCommand *cmd, int *exitStatus)
+{
+    pid_t spawnPid = -100;
 
+    spawnPid = fork(); 
+    switch(spawnPid)
+    {
+        case -1: // fork was not successful
+            perror("FATAL ERROR: fork() failed!");
+            exit(1);
+            break;
+        
+        case 0: // fork was successful and we are in the child process
+			// execvp runs our command
+            if (execvp(cmd->args[0], cmd->args))
+            {
+                // if we returned from execvp, it means an error occurred 
+				// probably the command wasn't found
+                printf("command not found: %s\n", cmd->args[0]);                
+                exit(1);
+            }
+            break;
+            
+        default: // fork was successful and we are in the "parent" (smallsh) process
+			// in our simple command runner, we just wait for the command to finish
+            {
+				// waitpid will update our exitStatus variable that we passed in
+                waitpid(spawnPid, exitStatus, 0);
+            }
+    }
+    //will be executed by both???????????????????????????????
+    if(strcmp(cmd->program, "status") == 0){
+            //getStatus(lastCommand, exitStatus);
+            printStatus(exitStatus);
+    }
+}
 
 int main(void) {
     int exitFlag = 0;
     int exitStatus = 0;
+    int* xStatPtr = &exitStatus;
+
     // set to 1 in exit function
     while (exitFlag == 0) {
+        /************************************ GETTING VALID INPUT ************************************/
         //prompt user, store input string
         cmdPrompt();
         char rawInput[512];
         memset(rawInput, '\0', sizeof(rawInput));//reset to null
         char* cmdLine = cmdInput(rawInput);
-        // if line is comment or empty, prompt user
+        // loop prompt if line is comment or empty
         while (isComment(cmdLine)) {
             cmdPrompt();
             cmdLine = cmdInput(rawInput);
         }
-        // parse input into tokens
+
+        /******************************* PARSING AND EXPANDING INPUT ************************************/
         // empty array for tokens
         char* tokenList[512];
         memset(tokenList, '\0', sizeof(tokenList));//reset to null
 
         struct aCommand* cmd = malloc(sizeof(struct aCommand));
-        
+        // parse input into tokens
         char** expandedTokens = inputParse(cmdLine, tokenList, cmd);
 
-        //initialize struct member
-        //struct aCommand* cmd = malloc(sizeof(struct aCommand));
+        //initialize struct member 'program'
         cmd->program = strdup(expandedTokens[0]);
 
         char** args = findArgs(expandedTokens, cmd);
         
-        //testing location only, will be called in runCommand()*********************************************************
+        //testing location only, will be called in runCommand()????????????????????????????????
         if(strcmp(cmd->program, cd) == 0){
             changeDir(cmd);
         }
         //store last cmd struct for status?????????????????????????????????????????
         struct aCommand* lastCommand = malloc(sizeof(struct aCommand));
         lastCommand = cmd;
+
+        //testing runCommand
+        //if last command was built in, ignore
+        if(strcmp(cmd->program, "exit") != 0 || strcmp(cmd->program, "cd") != 0 || strcmp(cmd->program, "status") != 0){
+            runCommand(cmd, &exitStatus);
+        }
+        
         if(strcmp(cmd->program, "status") == 0){
-            getStatus(lastCommand, exitStatus);
+            //getStatus(lastCommand, exitStatus);
+            printStatus(exitStatus);
         }
         //strcpy(cmd->args, args);
         // cmd->args = args;
