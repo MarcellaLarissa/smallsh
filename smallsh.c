@@ -47,7 +47,7 @@ int redirectOutput(struct aCommand* cmd);
 void runBackground(struct aCommand* cmd);
 void printCommand(struct aCommand* cmd);
 void changeDir(struct aCommand* cmd);
-int getStatus(struct aCommand* cmd);
+int getStatus(struct aCommand* cmd, int exitStatus);
 int exitShell(struct aCommand* cmd);
 
 /**********************************************
@@ -445,11 +445,13 @@ void changeDir(struct aCommand* cmd){
     }
 }
 
-int getStatus(struct aCommand* cmd){
-    i//if no command has run, 
+int getStatus(struct aCommand* lastCommand, int exitStatus){
+    //if no command has run, 
+    if(strcmp(lastCommand->program, "status") == 0){
         return 0;
+    }
     //if last command was built in, ignore
-    
+
     //get exit status for process
 
     //get SIG for process
@@ -470,6 +472,7 @@ int exitShell(){
 
 int main(void) {
     int exitFlag = 0;
+    int exitStatus = 0;
     // set to 1 in exit function
     while (exitFlag == 0) {
         //prompt user, store input string
@@ -488,6 +491,7 @@ int main(void) {
         memset(tokenList, '\0', sizeof(tokenList));//reset to null
 
         struct aCommand* cmd = malloc(sizeof(struct aCommand));
+        
         char** expandedTokens = inputParse(cmdLine, tokenList, cmd);
 
         //initialize struct member
@@ -500,7 +504,12 @@ int main(void) {
         if(strcmp(cmd->program, cd) == 0){
             changeDir(cmd);
         }
-        
+        //store last cmd struct for status?????????????????????????????????????????
+        struct aCommand* lastCommand = malloc(sizeof(struct aCommand));
+        lastCommand = cmd;
+        if(strcmp(cmd->program, "status") == 0){
+            getStatus(lastCommand, exitStatus);
+        }
         //strcpy(cmd->args, args);
         // cmd->args = args;
         printCommand(cmd);
