@@ -1,0 +1,9 @@
+The result is 1
+All of this is being written to the file using printf
+arg 1: foo.txt | 
+The struct input file is (null)
+The struct output file is foo.txt
+The struct is background is 0
+The struct num tokens is 3
+The struct program is ls
+:
