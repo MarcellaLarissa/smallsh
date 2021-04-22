@@ -9,6 +9,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <errno.h>
 
 
 const char* term = "$$";
@@ -416,32 +417,30 @@ void runBackground(struct aCommand* cmd) {
 * This function takes a struct and changes the PWD to home or the passed relative or absolute file path, then checks for any errors
 */
 void changeDir(struct aCommand* cmd){
-    int cdReturn = 1;
     //case of no file path arg-- go to HOME
     if((strcmp(cmd->program, cd) == 0) && cmd->args[1] == NULL){
-        printf("test program \n");
-        //cd to users home env variable, collect error message
-        cdReturn = chdir(getenv("HOME"));
-               
+        //cd to users home env variable
+        if(chdir(getenv("HOME")) !=0){
+            // print any error message
+            perror("Error, unable to change to home directory.");
+        }       
+         //test      
         char buf[MAX_ARGS];
         printf("%s is CWD\n", getcwd(buf, MAX_ARGS));
-        //printf("%s is CWD\n", buf);
     }
     //case of args-- pass args to chdir()
     else if((strcmp(cmd->program, cd) == 0) && cmd->args[1] != NULL){
-        printf("test args[0]\n");
-        //pass file path to chdir(), collect error message
-        cdReturn = chdir(cmd->args[1]);
- 
+        //pass file path to chdir(),
+         if(chdir(cmd->args[1]) !=0){
+             // print any error message
+            perror("Please enter a valid file path.");
+        }
+        //test
         char buf[MAX_ARGS];
         printf("%s is CWD\n", getcwd(buf, MAX_ARGS));
     }
     else{
-        printf("CD not working\n");
-    }
-    //print message in case of chdir() returning error
-    if(cdReturn == -1){
-        printf("%s is not a valid file path.\n", cmd->args[1]);
+        printf("CD not working, no error message from perror.\n");
     }
 }
 
@@ -461,11 +460,12 @@ int getStatus(struct aCommand* lastCommand, int exitStatus){
 /*
 * This function terminates all processes and exits the shell, returns exit status*************************prob switch back to void ret type
 */
-int exitShell(){
+int exitShell(struct aCommand* cmd){
     //not sure if this is the right place for atexit()
-    int xStat = atexit();//some zombie checking im guessing????????????????????
+    /*int xStat = atexit(getStatus);//some zombie checking im guessing????????????????????
     exit(xStat);
-    return xStat;
+    return xStat;*/
+    return 0;
 }
 
 
