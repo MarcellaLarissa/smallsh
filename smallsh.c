@@ -39,7 +39,7 @@ char** inputParse(char* rawInput, char** tokenList, struct aCommand* cmd);
 char** getExpTokens(char** tokenList, int numTokens);
 char* expandToken(char* tokenList);
 char* get_pid_str();
-char** findArgs(char** expTokenList, struct aCommand* cmd);
+void findArgs(char** expTokenList, struct aCommand* cmd);
 int isSpecialToken(char* token);
 int findGT(char** expandedTokens, struct aCommand* cmd);
 int findLT(char** expandedTokens, struct aCommand* cmd);
@@ -50,21 +50,58 @@ int redirectInput(struct aCommand* cmd);
 int redirectOutput(struct aCommand* cmd);
 int redirectOutputBG(struct aCommand* cmd);
 int redirectInputBG(struct aCommand* cmd);
-void runBackground(struct aCommand* cmd, int *exitStatus);
 void printCommand(struct aCommand* cmd);
 void changeDir(struct aCommand* cmd);
 int getStatus(struct aCommand* lastCommand, int exitStatus);
 void printStatus(int exitStatus);
 int exitShell(struct aCommand* cmd);
-void runCommand(struct aCommand *cmd, int *exitStatus);
+void runCommand(struct aCommand *cmd, struct sigaction sa, int *exitStatus);
 void runBuiltInCommand(struct aCommand *cmd, int exitStatus);
 int isBuiltInCommand(char* c);
 void handleINTToggle();
 void handleBGToggle();
+void checkBG();
+void killBG();
 
 //global
 int allowBG = 1;
 int allowINT = 1;
+int debugger = 0;
+
+//process tracking globals
+#define MAX_PROCS 512
+int numProcesses = 0;
+int processes[MAX_PROCS] = {0};
+
+//Utility add/del PID
+void addProcess(int p){
+    for(int i = 0; i < MAX_PROCS; i ++){
+        if(processes[i] == 0){
+            processes[i] = p;
+        }
+
+    }
+}
+
+void delProcess(int p){
+    for(int i = 0; i < MAX_PROCS; i ++){
+        if(processes[i] == p){
+            processes[i] = 0;
+        }
+
+    }
+}
+
+
+void killAllProc(){
+    for(int i = 0; i < MAX_PROCS; i ++){
+        if(processes[i] != 0){
+            kill(processes[i], SIGKILL);
+            processes[i] = 0;
+        }
+
+    }
+}
 /**********************************************
 *
 * This block of functions regards the outer shell:
@@ -179,7 +216,7 @@ char** getExpTokens(char** tokenList, int numTokens) {
     for (int i = 0; i < numTokens; i++) {
         char* token2 = tokenList[i];
         expanded = expandToken(token2);
-        printf("token: %s expanded: %s\n", token2, expanded);
+        //printf("token: %s expanded: %s\n", token2, expanded);
         expTokenList[i] = strdup(expanded);// duplicate into list
     }
     return expTokenList;
@@ -227,7 +264,7 @@ char* get_pid_str() {
 // the corresponding function is called and the next token is handled as a correstponding input/output file
 // if the token is special and is '&' a flag is added to the is_background member of the struct.
 // if the token is not special, it is an argument and added to the struct member arguments list.
-char** findArgs(char** expTokenList, struct aCommand* cmd) {
+void findArgs(char** expTokenList, struct aCommand* cmd) {
     int numTokens = cmd->numTokens;
     for(int a = 0; a < MAX_ARGS;a++){
         cmd->args[a] = NULL;
@@ -283,7 +320,6 @@ char** findArgs(char** expTokenList, struct aCommand* cmd) {
         argIndex++;
     }
             
-    return cmd->args;
 }
 
 /*
@@ -358,6 +394,9 @@ int findAmp(char** expandedTokens, struct aCommand* cmd) {
 }
 //print command structure
 void printCommand(struct aCommand* cmd) {
+    if(!debugger){
+        return;
+    }
     for(int a = 0; a < MAX_ARGS;a++){
         if(cmd->args[a] != NULL){
               fprintf(stderr, "arg %d: %s | ",a, cmd->args[a]);
@@ -389,7 +428,7 @@ int redirectInput(struct aCommand* cmd) {
 		exit(1); 
 	}
 	// Written to terminal
-	fprintf(stderr,"sourceFD == %d\n", sourceFD); 
+	if(debugger) fprintf(stderr,"sourceFD == %d\n", sourceFD); 
 
 	// Redirect stdin to source file
 	int result = dup2(sourceFD, 0);
@@ -404,7 +443,7 @@ int redirectInput(struct aCommand* cmd) {
 // this function redirects stdin to the given file 
 // this function was provided in Explorations module Process I/O https://canvas.oregonstate.edu/courses/1825887/pages/exploration-processes-and-i-slash-o?module_item_id=20268641
 int redirectOutput(struct aCommand* cmd) {
-    fprintf(stderr, "The struct output file is %s\n", cmd->output_file);
+    if(debugger) fprintf(stderr, "The struct output file is %s\n", cmd->output_file);
     
    /* if (argc == 1) {
         printf("Usage: ./main <filename to redirect stdout to>\n");
@@ -417,17 +456,17 @@ int redirectOutput(struct aCommand* cmd) {
         exit(1);
     }
     // Currently printf writes to the terminal
-    fprintf(stderr,"The file descriptor for targetFD is %d\n", targetFD);
+    if(debugger) fprintf(stderr,"The file descriptor for targetFD is %d\n", targetFD);
 
     // Use dup2 to point FD 1, i.e., standard output to targetFD
     int result = dup2(targetFD, 1);
-    fprintf(stderr,"The result is %d\n", result);
+    if(debugger) fprintf(stderr,"The result is %d\n", result);
     if (result == -1) {
         perror("redirect output : dup2");
         exit(2);
     }
     // Now whatever we write to standard out will be written to targetFD
-    fprintf(stderr,"xxxxxxxxxxxxxxxAll of this is being written to the file using printf\n");
+    if(debugger) fprintf(stderr,"xxxxxxxxxxxxxxxAll of this is being written to the file using printf\n");
     //after process exits, close file
     fcntl(targetFD, F_SETFD, FD_CLOEXEC);
     return 0;  
@@ -446,7 +485,7 @@ int redirectInputBG(struct aCommand* cmd) {
 		exit(1); 
 	}
 	// Written to terminal
-	fprintf(stderr,"sourceFD == %d\n", sourceFD); 
+	if(debugger) fprintf(stderr,"sourceFD == %d\n", sourceFD); 
 
 	// Redirect stdin to source file
 	int result = dup2(sourceFD, 0);
@@ -460,7 +499,7 @@ int redirectInputBG(struct aCommand* cmd) {
 // this function redirects stdin to the given file 
 // this function was provided in Explorations module Process I/O https://canvas.oregonstate.edu/courses/1825887/pages/exploration-processes-and-i-slash-o?module_item_id=20268641
 int redirectOutputBG(struct aCommand* cmd) {
-    fprintf(stderr, "The struct output file is %s\n", cmd->output_file);
+    if(debugger) fprintf(stderr, "The struct output file is %s\n", cmd->output_file);
     
    /* if (argc == 1) {
         printf("Usage: ./main <filename to redirect stdout to>\n");
@@ -473,34 +512,21 @@ int redirectOutputBG(struct aCommand* cmd) {
         exit(1);
     }
     // Currently printf writes to the terminal
-    fprintf(stderr,"BG The file descriptor for targetFD is %d\n", targetFD);
+    if(debugger) fprintf(stderr,"BG The file descriptor for targetFD is %d\n", targetFD);
 
     // Use dup2 to point FD 1, i.e., standard output to targetFD
     int result = dup2(targetFD, 1);
-    fprintf(stderr,"The result is %d\n", result);
+    if(debugger) fprintf(stderr,"The result is %d\n", result);
     if (result == -1) {
         perror("BG redirect output : dup2");
         exit(2);
     }
     // Now whatever we write to standard out will be written to targetFD
-    fprintf(stderr,"xxxxxxxxxxxxxxxAll of this is being written to the file using printf\n");
+    if(debugger) fprintf(stderr,"xxxxxxxxxxxxxxxAll of this is being written to the file using printf\n");
 
     return 0;  
 }
 
-
-void runBackground(struct aCommand* cmd, int *exitStatus) {
-    cmd->is_background = 1;
-
-    //print pid
-    printf("PID is %d:\n", getpid());
-    // run process************************?????????????????????????????????
-    runCommand(cmd, exitStatus);
-
-    printf("PID %d has exited with Status %d:\n", getpid(), *exitStatus);
-    
-    return;
-}
 
 /*****************************************************************************
 * 
@@ -520,7 +546,7 @@ void changeDir(struct aCommand* cmd){
         }       
          //test      
         char buf[MAX_ARGS];
-        printf("%s is CWD\n", getcwd(buf, MAX_ARGS));
+        if(debugger) printf("%s is CWD\n", getcwd(buf, MAX_ARGS));
     }
     //case of args-- pass args to chdir()
     else if((strcmp(cmd->program, cd) == 0) && cmd->args[1] != NULL){
@@ -531,10 +557,10 @@ void changeDir(struct aCommand* cmd){
         }
         //test
         char buf[MAX_ARGS];
-        printf("%s is CWD\n", getcwd(buf, MAX_ARGS));
+        if(debugger) printf("%s is CWD\n", getcwd(buf, MAX_ARGS));
     }
     else{
-        printf("CD not working, no error message from perror.\n");
+        if(debugger) printf("CD not working, no error message from perror.\n");
     }
 }
 
@@ -550,7 +576,7 @@ int getStatus(struct aCommand* lastCommand, int exitStatus){
     if(strcmp(lastCommand->program, "exit") != 0 || strcmp(lastCommand->program, "cd") != 0 || strcmp(lastCommand->program, "status") != 0){
         printStatus(exitStatus);
     }
-     printf("lastCommand is: \n");
+     if(debugger) printf("lastCommand is: \n");
     printCommand(lastCommand);
     return 0;
 }
@@ -575,13 +601,15 @@ void printStatus(int exitStatus)
 * This function terminates all processes and exits the shell
 */
 int exitShell(struct aCommand* cmd){
+    killBG();
+    //checkBG();
     exit(0);
     return 0;
 }
 
 // basic run command that only runs commands in the foreground
 // doesn't handle I/O redirection or ctrl-c 
-void runCommand(struct aCommand *cmd, int *exitStatus)
+void runCommand(struct aCommand *cmd, struct sigaction sa, int *exitStatus)
 {
     pid_t spawnPid = -100;
 
@@ -595,16 +623,22 @@ void runCommand(struct aCommand *cmd, int *exitStatus)
         
         case 0: // fork was successful and we are in the child process
 			// execvp runs our command
- 
-                // DEV NOTES we may be able to remove some of the nesting here if we call input/output redirect and pass the reDirect variable to it
-                //if foreground, redirect
-                if(!cmd->is_background){
+                // enable Ctrl+C with signal handler
+
+                    if(!cmd->is_background || !allowBG){
+                        sa.sa_handler = SIG_DFL;
+                        sigaction(SIGINT, &sa, NULL);
+                    }
+                //if foreground, redirect I/O 
+                if(!cmd->is_background || !allowBG){
                     if(cmd->output_file){
                         redirectOutput(cmd);
                     }
                     if(cmd->input_file){
                         redirectInput(cmd);
                     }
+                    
+                    
                 }
                 //if background, redirect I/O to null if user hasnt's specified redirection
                 else{
@@ -629,16 +663,17 @@ void runCommand(struct aCommand *cmd, int *exitStatus)
             
         default: // fork was successful and we are in the "parent" (smallsh) process
 			// in our simple command runner, we just wait for the command to finish
-            // if foreground, wait
-            if(!cmd->is_background)
+            // if foreground command or ignoring background, wait
+            if(!cmd->is_background || !allowBG)
             {
 				// waitpid will update our exitStatus variable that we passed in
                 waitpid(spawnPid, exitStatus, 0);
             }
-           // if background, wait and print backgound pid
+           // if background, wait and print backgound pid, add to pid list
             else{
                 waitpid(spawnPid, exitStatus, WNOHANG);
                 printf("BG PID : %d\n", spawnPid);
+                addProcess(spawnPid);
             }
     }
 }
@@ -660,7 +695,7 @@ void runBuiltInCommand(struct aCommand *cmd, int exitStatus)
 	}
 	else
 	{
-		fprintf(stderr, "How the F did we get here?!?... lol\n");
+		if(debugger) fprintf(stderr, "How the F did we get here?!?... lol\n");
 	}
 }
 
@@ -673,6 +708,8 @@ int isBuiltInCommand(char* c)
 	return 0;
 }
 
+
+
 void checkBG(){
     int pidStatus;
     int pid;
@@ -680,6 +717,15 @@ void checkBG(){
         printf("child with PID %d terminated\n", pid);
         printStatus(pidStatus);
     }
+}
+
+void killBG(){
+    int pidStatus;
+    int pid;
+    while((pid = waitpid(-1, &pidStatus, WNOHANG)) > 0){
+        delProcess(pid);
+    }
+    killAllProc();
 }
 
 /*************************************************
@@ -690,25 +736,16 @@ void checkBG(){
 void handleBGToggle(){
     if(allowBG == 1)
     {
-        printf("Entering foreground only mode. & will now be ignored: \n");
+        //printf("Entering foreground only mode. & will now be ignored: \n");
+        char* message = "Entering foreground only mode. & will now be ignored: \n";
+        write(1, message, 56);
         allowBG = 0;
     }
     else {
-        printf("Exiting foreground only mode. & will now be enabled: \n");
+        //printf("Exiting foreground only mode. & will now be enabled: \n");
+        char* message = "Exiting foreground only mode. & will now be enabled: \n";
+        write(1, message, 55);
         allowBG = 1;
-    }
-}
-
-// Handler for SIGNINT / Crtl + C
-void handleINTToggle(){
-    if(allowINT == 1)
-    {
-        printf("Entering foreground only mode. Ctrl+C will now be ignored: \n");
-        allowINT = 0;
-    }
-    else {
-        printf("Exiting foreground only mode. Ctrl+C will now be enabled: \n");
-        allowINT = 1;
     }
 }
 
@@ -716,18 +753,12 @@ void handleINTToggle(){
 int main(void) {
     int exitFlag = 0;
     int exitStatus = 0;
-    int* xStatPtr = &exitStatus;
 
     //initialize SIGNAL struct
-    struct sigaction SIGINT_action = {0}, SIGTSTP_action = {0}, ignore_action = {0};
-
-    /*****************************
-    //if command loop malfunctions, try clearerr(stdin);
-    ******************************/
-    //signal handle here for ctrl Z
-    //toggles forground only mode
-    	
-    // Fill out the SIGINT_action struct
+    struct sigaction SIGINT_action = {{0}}, SIGTSTP_action = {{0}};
+    
+  	 /*************      Ctrl + Z  Registration      ****************/
+    // Fill out the SIGTSTP_action struct
 	// Register handle_SIGINT as the signal handler
 	SIGTSTP_action.sa_handler = handleBGToggle;
 	// Block all catchable signals while handle_SIGINT is running
@@ -735,32 +766,17 @@ int main(void) {
 	// No flags set
 	SIGTSTP_action.sa_flags = 0;
 	sigaction(SIGTSTP, &SIGTSTP_action, NULL);
-    /*****************************/
-    //signal handle here for ctrl C
-    //make shell ignore ctrl C
-    
+    /*************      Ctrl + C  Registration      ****************/
 	// Fill out the SIGINT_action struct
 	// Register handle_SIGINT as the signal handler
-	SIGINT_action.sa_handler = handleINTToggle;
+	SIGINT_action.sa_handler = SIG_IGN;
 	// Block all catchable signals while handle_SIGINT is running
 	sigfillset(&SIGINT_action.sa_mask);
 	// No flags set
 	SIGINT_action.sa_flags = 0;
 	sigaction(SIGINT, &SIGINT_action, NULL);
 
-    // The ignore_action struct as SIG_IGN as its signal handler
-	ignore_action.sa_handler = SIG_IGN;
 
-    // Register the ignore_action as the handler for SIGTERM, SIGHUP, SIGQUIT.
-	// So all three of these signals will be ignored.
-    if(!allowBG){
-	    sigaction(SIGTSTP, &ignore_action, NULL);
-    
-    }
-    if(!allowINT){
-    //if(!cmd->is_background){/********************************this might be better, but the struct isn't initialized yet
-	    sigaction(SIGINT, &ignore_action, NULL);
-    }
     // set to 1 in exit function
     while (exitFlag == 0) {
         /************************************ GETTING VALID INPUT ************************************/
@@ -777,7 +793,7 @@ int main(void) {
             cmdLine = cmdInput(rawInput);
         }
 
-        /******************************* PARSING AND EXPANDING INPUT ************************************/
+        /***************************** PARSING AND EXPANDING INPUT **********************************/
         // empty array for tokens
         char* tokenList[512];
         memset(tokenList, '\0', sizeof(tokenList));//reset to null
@@ -790,44 +806,21 @@ int main(void) {
         cmd->program = strdup(expandedTokens[0]);
 
         // input and output files are initialized
-        char** args = findArgs(expandedTokens, cmd);
+        findArgs(expandedTokens, cmd);
         
-        /*/testing location only, will be called in runCommand()????????????????????????????????
-        if(strcmp(cmd->program, cd) == 0){
-            changeDir(cmd);
-        }*/
-        //store last cmd struct for status?????????????????????????????????????????
-        struct aCommand* lastCommand = malloc(sizeof(struct aCommand));
-        lastCommand = cmd;
-
-
-
-        //testing runCommand
+       
+        // runCommand
         if (!isBuiltInCommand(cmd->program))
 		{
-			runCommand(cmd, &exitStatus);
+			runCommand(cmd, SIGINT_action, &exitStatus);
 		}
 		else // the user typed in a built in command, like "status" or "cd"
 		{
 			// built in commands do not update the exit status, so note it's not &exitStatus
 			runBuiltInCommand(cmd, exitStatus);
 		}
-        /*
-        //if last command was built in, ignore
-        if(strcmp(cmd->program, "exit") != 0 || strcmp(cmd->program, "cd") != 0 || strcmp(cmd->program, "status") != 0){
-            printf("not a built in command \n");
-            runCommand(cmd, &exitStatus);
-        }
-        
-        if(strcmp(cmd->program, "status") == 0){
-            //getStatus(lastCommand, exitStatus);
-            printf("this IS a built in command: status \n");
-            printStatus(exitStatus);
-        }
-        */
-        //strcpy(cmd->args, args);
-        // cmd->args = args;
-        printCommand(cmd);
+     
+        if(debugger) printCommand(cmd);
 
     }
 
