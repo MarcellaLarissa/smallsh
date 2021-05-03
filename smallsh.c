@@ -66,14 +66,23 @@ void killBG();
 //global
 int allowBG = 1;
 int allowINT = 1;
-int debugger = 0;
+int debugger = 0;//this is used to toggle debugging print statements
 
 //process tracking globals
 #define MAX_PROCS 512
 int numProcesses = 0;
 int processes[MAX_PROCS] = {0};
 
-//Utility add/del PID
+/**********************************************
+*
+* This block of functions regards killing processes
+*
+***********************************************/
+/*
+* Utility function to add PID to list
+*   Citation:
+* Code based on interactive code debugging and development during office hours of TA Michael Slater
+*/
 void addProcess(int p){
     for(int i = 0; i < MAX_PROCS; i ++){
         if(processes[i] == 0){
@@ -83,6 +92,11 @@ void addProcess(int p){
     }
 }
 
+/*
+* Utility function to remove PID from list
+*   Citation:
+* Code based on interactive code debugging and development during office hours of TA Michael Slater
+*/
 void delProcess(int p){
     for(int i = 0; i < MAX_PROCS; i ++){
         if(processes[i] == p){
@@ -91,8 +105,11 @@ void delProcess(int p){
 
     }
 }
-
-
+/*
+* Utility function loops through list of processes and kills each
+*   Citation:
+* Code based on interactive code debugging and development during office hours of TA Michael Slater
+*/
 void killAllProc(){
     for(int i = 0; i < MAX_PROCS; i ++){
         if(processes[i] != 0){
@@ -108,26 +125,25 @@ void killAllProc(){
 * cmd prompt and input, and comments or blank lines
 *
 ***********************************************/
+//print prompt
 void cmdPrompt() {
     printf(":");
     fflush(stdout);
 }
 
+//get input from standard input, return array pointer
 char* cmdInput(char* input) {
     char* rawInput = input;
     fgets(rawInput, 512, stdin);
     return rawInput;
 }
-
+/*
+* Utility function returns true for valid pointer, null terminator, newline, or comment
+* called in main, looping until returns false
+*   Citation:
+* Code based on interactive code debugging and development during office hours of TA Michael Slater
+*/
 int isComment(char* rawInput) {
-    //use for input debugging
-    /*char* s = rawInput;
-    while(*s != '\0'){
-        printf("'%c'|", *s);// switch %d and cast to int to see ASCII numbers of chars
-        s++;
-    }
-    printf("\n");*/
-    //return 1;
     //check the pointer
     if(!rawInput){
         return 1;
@@ -172,6 +188,8 @@ int isComment(char* rawInput) {
 * loops through list of raw tokens and parses at spaces, copies to tokenList
 * then calls getExpTokens, updates the struct with numTokens, and returns the Expanded tokenList
 *
+*   Citation:
+* Code based on interactive code debugging and development during office hours of TA Michael Slater
 */
 char**  inputParse(char* rawInput, char** tokenList, struct aCommand* cmd) {
     int inputLength = strlen(rawInput);
@@ -203,6 +221,8 @@ char**  inputParse(char* rawInput, char** tokenList, struct aCommand* cmd) {
 * it takes the list of parsed tokens, loops through and calls expandToken() function on each token, 
 * returns the full list
 * 
+*   Citation:
+* Code based on interactive code debugging and development during office hours of TA Michael Slater
 */
 char** getExpTokens(char** tokenList, int numTokens) {
     char** expTokenList = calloc(numTokens + 1, sizeof(char*));
@@ -225,6 +245,9 @@ char** getExpTokens(char** tokenList, int numTokens) {
 /* 
 * this function takes a token and expands if term '$$' is found
 * it is called in getExpTokens()
+*
+*   Citation:
+* Code based on interactive code debugging and development during office hours of TA Michael Slater
 */
 char* expandToken(char* tokenList) {
     char* token = tokenList;
@@ -250,7 +273,11 @@ char* expandToken(char* tokenList) {
 }
 
 
-//This function gets the pid of current process and returns it as a string **written by Michael Slater
+/* 
+* This function gets the pid of current process and returns it as a string 
+* Citation:
+* Code based on a sample provided by TA Michael Slater
+*/
 
 char* get_pid_str() {
     int pid = (int)getpid();
@@ -264,6 +291,10 @@ char* get_pid_str() {
 // the corresponding function is called and the next token is handled as a correstponding input/output file
 // if the token is special and is '&' a flag is added to the is_background member of the struct.
 // if the token is not special, it is an argument and added to the struct member arguments list.
+/*
+*   Citation:
+* Code based on interactive code debugging and development during office hours of TA Michael Slater
+*/
 void findArgs(char** expTokenList, struct aCommand* cmd) {
     int numTokens = cmd->numTokens;
     for(int a = 0; a < MAX_ARGS;a++){
@@ -327,6 +358,9 @@ void findArgs(char** expTokenList, struct aCommand* cmd) {
 * it returns 1 for each of the special tokens
 * and 0 for non special tokens
 * it is called in findArgs() which loops through the expanded token list
+*
+*   Citation:
+* Code based on interactive code debugging and development during office hours of TA Michael Slater
 */
 int isSpecialToken(char* token) {
     char* greaterThan = ">";
@@ -353,7 +387,11 @@ int isSpecialToken(char* token) {
 * these functions are called in findArgs()
 *
 ******************************************************************************/
-
+/*  this function takes the list of tokens after $$ expansion to PID and the command struct 
+* loops through the list seeking a ">" -- greater than and, if it exists, returning the index in the list 
+* Citation:
+* Code based on interactive code debugging and development during office hours of TA Michael Slater
+*/
 int findGT(char** expandedTokens, struct aCommand* cmd) {
     char* greaterThan = ">";
     int numTokens = cmd->numTokens;
@@ -366,7 +404,11 @@ int findGT(char** expandedTokens, struct aCommand* cmd) {
     }
     return -1;
 }
-
+/*  this function takes the list of tokens after $$ expansion to PID and the command struct 
+* loops through the list seeking a "<" -- less than and, if it exists, returning the index in the list 
+* Citation:
+* Code based on interactive code debugging and development during office hours of TA Michael Slater
+*/
 int findLT(char** expandedTokens, struct aCommand* cmd) {
     char* lessThan = "<";
     int numTokens = cmd->numTokens;
@@ -379,7 +421,13 @@ int findLT(char** expandedTokens, struct aCommand* cmd) {
     }
     return -1;
 }
-
+/*  
+* this function takes the list of tokens after $$ expansion to PID and the command struct 
+* loops through the list seeking a "&" -- ampersand and, if it exists, returning the index in the list 
+*
+* Citation:
+* Code based on interactive code debugging and development during office hours of TA Michael Slater
+*/
 int findAmp(char** expandedTokens, struct aCommand* cmd) {
     char* amp = "&";
     int numTokens = cmd->numTokens;
@@ -392,7 +440,7 @@ int findAmp(char** expandedTokens, struct aCommand* cmd) {
     }
     return -1;
 }
-//print command structure
+//print command structure : used for debugging
 void printCommand(struct aCommand* cmd) {
     if(!debugger){
         return;
@@ -415,10 +463,11 @@ void printCommand(struct aCommand* cmd) {
 * this block of functions handles redirections and running commands in the background
 * 
 ******************************************************************************/
-// this function redirects stdin to the given file 
-// this function was provided in Explorations module Process I/O https://canvas.oregonstate.edu/courses/1825887/pages/exploration-processes-and-i-slash-o?module_item_id=20268641
-
-// DEV NOTES********** if we pass in the file name then we may be able to repourpose this function when running backround processes (see runCommand)
+/* this function redirects stdin to the given file 
+* Citation:
+* this function was provided in Explorations module Process I/O
+* https://canvas.oregonstate.edu/courses/1825887/pages/exploration-processes-and-i-slash-o?module_item_id=20268641
+*/
 int redirectInput(struct aCommand* cmd) {
     
     	// Open source file
