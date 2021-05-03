@@ -52,7 +52,6 @@ int redirectOutputBG(struct aCommand* cmd);
 int redirectInputBG(struct aCommand* cmd);
 void printCommand(struct aCommand* cmd);
 void changeDir(struct aCommand* cmd);
-int getStatus(struct aCommand* lastCommand, int exitStatus);
 void printStatus(int exitStatus);
 int exitShell(struct aCommand* cmd);
 void runCommand(struct aCommand *cmd, struct sigaction sa, int *exitStatus);
@@ -60,6 +59,7 @@ void runBuiltInCommand(struct aCommand *cmd, int exitStatus);
 int isBuiltInCommand(char* c);
 void handleINTToggle();
 void handleBGToggle();
+void checkFG(int exitStatus);
 void checkBG();
 void killBG();
 
@@ -564,22 +564,6 @@ void changeDir(struct aCommand* cmd){
     }
 }
 
-/*
-* This function
-*/
-int getStatus(struct aCommand* lastCommand, int exitStatus){
-    //if no command has run, *****************************************************************handle this in commandRun function
-    if(strcmp(lastCommand->program, "status") == 0){
-        printStatus(exitStatus);
-    }
-    //if last command was built in, ignore
-    if(strcmp(lastCommand->program, "exit") != 0 || strcmp(lastCommand->program, "cd") != 0 || strcmp(lastCommand->program, "status") != 0){
-        printStatus(exitStatus);
-    }
-     if(debugger) printf("lastCommand is: \n");
-    printCommand(lastCommand);
-    return 0;
-}
 
 // small function that inspects the EXIT or TERMINATION SIGNAL status and prints accordingly
 void printStatus(int exitStatus)
@@ -608,7 +592,7 @@ int exitShell(struct aCommand* cmd){
 }
 
 // basic run command that only runs commands in the foreground
-// doesn't handle I/O redirection or ctrl-c 
+// handles I/O redirection or ctrl-c 
 void runCommand(struct aCommand *cmd, struct sigaction sa, int *exitStatus)
 {
     pid_t spawnPid = -100;
@@ -668,6 +652,7 @@ void runCommand(struct aCommand *cmd, struct sigaction sa, int *exitStatus)
             {
 				// waitpid will update our exitStatus variable that we passed in
                 waitpid(spawnPid, exitStatus, 0);
+                checkFG(*exitStatus);
             }
            // if background, wait and print backgound pid, add to pid list
             else{
@@ -678,7 +663,7 @@ void runCommand(struct aCommand *cmd, struct sigaction sa, int *exitStatus)
     }
 }
 
-// runs one of our built in commands
+// this function runs built in commands: status, cd, and exit
 void runBuiltInCommand(struct aCommand *cmd, int exitStatus)
 {
 	if (!strcmp(cmd->program, "status"))
@@ -699,6 +684,7 @@ void runBuiltInCommand(struct aCommand *cmd, int exitStatus)
 	}
 }
 
+// this function string compares command line input, seeking built in commands
 int isBuiltInCommand(char* c)
 {
 	if (!strcmp(c, "cd") || !strcmp(c, "status") || !strcmp(c, "exit"))
@@ -708,17 +694,31 @@ int isBuiltInCommand(char* c)
 	return 0;
 }
 
+/*************************************************
+ * this section deals with foreground and backround status, prepares to kill background processes
+ * *********************************************/
+//this function checks for terminated foreground processes and prints the exit status if one exists
+void checkFG(int exitStatus){
+        // process was terminated / segfaulted / etc.
+    if(!WIFEXITED(exitStatus)) 
+    {
+        printf("terminated by signal: %d\n", WTERMSIG(exitStatus));
+        if(debugger) printf("status from FG\n");
+    }
+	
+}
 
-
+//this function loops through running processes, gets the pid of any running process, when it terminates, gets and prints exit status
 void checkBG(){
     int pidStatus;
     int pid;
     while((pid = waitpid(-1, &pidStatus, WNOHANG)) > 0){
         printf("child with PID %d terminated\n", pid);
         printStatus(pidStatus);
+        if(debugger) printf("status from BG\n");
     }
 }
-
+//this function loops through all pid's, adds to array, calls function that kills processes
 void killBG(){
     int pidStatus;
     int pid;
@@ -781,6 +781,7 @@ int main(void) {
     while (exitFlag == 0) {
         /************************************ GETTING VALID INPUT ************************************/
         //prompt user, store input string
+        
         checkBG();
         cmdPrompt();
         char rawInput[512];
@@ -813,6 +814,7 @@ int main(void) {
         if (!isBuiltInCommand(cmd->program))
 		{
 			runCommand(cmd, SIGINT_action, &exitStatus);
+
 		}
 		else // the user typed in a built in command, like "status" or "cd"
 		{
