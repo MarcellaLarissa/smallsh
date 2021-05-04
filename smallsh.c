@@ -12,8 +12,13 @@
 #include <ctype.h>
 #include <errno.h>
 #include <signal.h>
-
-
+/*
+* * Citation:
+* Much of the code has been adapted from the provided Exploration Modules. In addition,
+* this program was partially developed in several TA sessions, primarily with Michael Slater.
+* Much of the Code structure and individual functions been created, edited, or influenced during interactive code debugging and 
+* development sessions. Inline citations are included below.
+*/
 
 const char* term = "$$";
 const char* home = "~";
@@ -465,7 +470,7 @@ void printCommand(struct aCommand* cmd) {
 ******************************************************************************/
 /* this function redirects stdin to the given file 
 * Citation:
-* this function was provided in Explorations module Process I/O
+* this function was adapted from Explorations module Process I/O
 * https://canvas.oregonstate.edu/courses/1825887/pages/exploration-processes-and-i-slash-o?module_item_id=20268641
 */
 int redirectInput(struct aCommand* cmd) {
@@ -489,8 +494,11 @@ int redirectInput(struct aCommand* cmd) {
     return 0;
 }
 
-// this function redirects stdin to the given file 
-// this function was provided in Explorations module Process I/O https://canvas.oregonstate.edu/courses/1825887/pages/exploration-processes-and-i-slash-o?module_item_id=20268641
+/* this function redirects stdout to the given file 
+* Citation:
+* this function was adapted from Explorations module Process I/O
+* https://canvas.oregonstate.edu/courses/1825887/pages/exploration-processes-and-i-slash-o?module_item_id=20268641
+*/
 int redirectOutput(struct aCommand* cmd) {
     if(debugger) fprintf(stderr, "The struct output file is %s\n", cmd->output_file);
     
@@ -522,7 +530,9 @@ int redirectOutput(struct aCommand* cmd) {
 }
 
 /*
-//redirect to null ********************************
+* This function is called when the shell in Backround Only Mode: it redirects standard I/0 to NULL so nothing unwanted prints to the terminal
+* Citation:
+* Code based on interactive code debugging and development during office hours of TA Michael Slater
 */
 
 int redirectInputBG(struct aCommand* cmd) {
@@ -545,8 +555,12 @@ int redirectInputBG(struct aCommand* cmd) {
     return 0;
 }
 
-// this function redirects stdin to the given file 
-// this function was provided in Explorations module Process I/O https://canvas.oregonstate.edu/courses/1825887/pages/exploration-processes-and-i-slash-o?module_item_id=20268641
+/*
+* This function redirects stdin to the given file 
+* Citation:
+* this function was adapted from Explorations module Process I/O 
+* https://canvas.oregonstate.edu/courses/1825887/pages/exploration-processes-and-i-slash-o?module_item_id=20268641
+*/
 int redirectOutputBG(struct aCommand* cmd) {
     if(debugger) fprintf(stderr, "The struct output file is %s\n", cmd->output_file);
     
@@ -584,6 +598,10 @@ int redirectOutputBG(struct aCommand* cmd) {
 ******************************************************************************/
 /*
 * This function takes a struct and changes the PWD to home or the passed relative or absolute file path, then checks for any errors
+* * Citation:
+* Code based on Exploration Environments
+* https://canvas.oregonstate.edu/courses/1810930/pages/exploration-environment?module_item_id=20734145
+* and interactive code debugging and development during office hours of TA Michael Slater
 */
 void changeDir(struct aCommand* cmd){
     //case of no file path arg-- go to HOME
@@ -614,7 +632,10 @@ void changeDir(struct aCommand* cmd){
 }
 
 
-// small function that inspects the EXIT or TERMINATION SIGNAL status and prints accordingly
+/* small function that inspects the EXIT or TERMINATION SIGNAL status and prints accordingly
+* * Citation:
+* Code based on a sample provided by TA Michael Slater
+*/
 void printStatus(int exitStatus)
 {
 	// process exited via return from main / exit()
@@ -640,8 +661,13 @@ int exitShell(struct aCommand* cmd){
     return 0;
 }
 
-// basic run command that only runs commands in the foreground
-// handles I/O redirection or ctrl-c 
+/*This function runs a command in the foreground or background, calls functions to redirect I/O as needed
+* checks exit status, adds PID to list
+* * Citation:
+* Code based on Exploration Executing a New Program
+* https://canvas.oregonstate.edu/courses/1810930/pages/exploration-process-api-executing-a-new-program?module_item_id=20734143
+* and interactive code debugging and development during office hours of TA Michael Slater
+*/
 void runCommand(struct aCommand *cmd, struct sigaction sa, int *exitStatus)
 {
     pid_t spawnPid = -100;
@@ -712,7 +738,7 @@ void runCommand(struct aCommand *cmd, struct sigaction sa, int *exitStatus)
     }
 }
 
-// this function runs built in commands: status, cd, and exit
+// this function is a caller: runs built in commands: status, cd, and exit
 void runBuiltInCommand(struct aCommand *cmd, int exitStatus)
 {
 	if (!strcmp(cmd->program, "status"))
@@ -746,7 +772,14 @@ int isBuiltInCommand(char* c)
 /*************************************************
  * this section deals with foreground and backround status, prepares to kill background processes
  * *********************************************/
-//this function checks for terminated foreground processes and prints the exit status if one exists
+/*this function checks for terminated foreground processes and prints the exit status if one exists
+* * Citation:
+* Code based on Exploration Executing a New Program
+* https://canvas.oregonstate.edu/courses/1810930/pages/exploration-process-api-executing-a-new-program?module_item_id=20734143
+* and Exploration: Process API Monitoring Child Process
+* https://canvas.oregonstate.edu/courses/1810930/pages/exploration-process-api-monitoring-child-processes?module_item_id=20734141
+* and interactive code debugging and development during office hours of TA Michael Slater
+*/
 void checkFG(int exitStatus){
         // process was terminated / segfaulted / etc.
     if(!WIFEXITED(exitStatus)) 
@@ -757,7 +790,14 @@ void checkFG(int exitStatus){
 	
 }
 
-//this function loops through running processes, gets the pid of any running process, when it terminates, gets and prints exit status
+/*this function loops through running processes, gets the pid of any running process, when it terminates, gets and prints exit status
+* * Citation:
+* Code based on Exploration Executing a New Program
+* https://canvas.oregonstate.edu/courses/1810930/pages/exploration-process-api-executing-a-new-program?module_item_id=20734143
+* and Exploration: Process API Monitoring Child Process
+* https://canvas.oregonstate.edu/courses/1810930/pages/exploration-process-api-monitoring-child-processes?module_item_id=20734141
+* and interactive code debugging and development during office hours of TA Michael Slater
+*/
 void checkBG(){
     int pidStatus;
     int pid;
@@ -767,7 +807,11 @@ void checkBG(){
         if(debugger) printf("status from BG\n");
     }
 }
-//this function loops through all pid's, adds to array, calls function that kills processes
+
+/*this function loops through all pid's, adds to array, calls function that kills processes
+* * Citation:
+* Code based on  interactive code debugging and development during office hours of TA Michael Slater
+*/
 void killBG(){
     int pidStatus;
     int pid;
@@ -780,8 +824,10 @@ void killBG(){
 /*************************************************
  * this section has signal handlers
  * *********************************************/
-
-// Handler for SIGNINT / Crtl + Z
+/* Handler for SIGNINT / Crtl + Z
+* * Citation:
+* Code based on  interactive code debugging and development during office hours of TA Michael Slater
+*/
 void handleBGToggle(){
     if(allowBG == 1)
     {
@@ -797,8 +843,13 @@ void handleBGToggle(){
         allowBG = 1;
     }
 }
-
-
+/*
+* Main Function has signal registration, main shell command prompt loop and calls functions to 
+* take cmd input, parse into components and initialize the command struct. 
+* Then the command is checked for foreground or background programs to run, and calls functions to execute them
+* * Citation:
+* Code based on  interactive code debugging and development during office hours of TA Michael Slater
+*/
 int main(void) {
     int exitFlag = 0;
     int exitStatus = 0;
