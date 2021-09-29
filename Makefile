@@ -11,7 +11,7 @@ SRCEXT = c
 BINDIR = .
 exe_file = $(BINDIR)/$(shell basename "${PWD}")
 
-# Handle debug case
+# Handle debug case #
 DEBUG ?= 1
 ifeq ($(DEBUG), 1)
 	CFLAGS += -g -Wall
